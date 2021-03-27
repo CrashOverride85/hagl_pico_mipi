@@ -111,6 +111,37 @@ extern "C" {
 #define MIPI_DCS_ADDRESS_MODE_FLIP_X        0x02
 #define MIPI_DCS_ADDRESS_MODE_FLIP_Y        0x01
 
+
+/* ST7735 stuff, taken from Adafruit_ST7735.h / Adafruit_ST77xx.h in Adafruit-ST7735-Library  */
+#define ST7735_FRMCTR1 0xB1
+#define ST7735_FRMCTR2 0xB2
+#define ST7735_FRMCTR3 0xB3
+#define ST7735_INVCTR 0xB4
+#define ST7735_DISSET5 0xB6
+#define ST7735_PWCTR1 0xC0
+#define ST7735_PWCTR2 0xC1
+#define ST7735_PWCTR3 0xC2
+#define ST7735_PWCTR4 0xC3
+#define ST7735_PWCTR5 0xC4
+#define ST7735_PWCTR6 0xFC
+#define ST7735_VMCTR1 0xC5
+#define ST7735_GMCTRP1 0xE0
+#define ST7735_GMCTRN1 0xE1
+
+#define ST77XX_CASET 0x2A
+#define ST77XX_RASET 0x2B
+#define ST77XX_NORON 0x13
+#define ST77XX_DISPON 0x29
+#define ST77XX_INVOFF 0x20
+#define ST77XX_COLMOD 0x3a
+#define ST77XX_MADCTL 0x36
+
+#define ST77XX_MADCTL_MY 0x80
+#define ST77XX_MADCTL_MX 0x40
+#define ST77XX_MADCTL_MV 0x20
+#define ST77XX_MADCTL_ML 0x10
+#define ST77XX_MADCTL_RGB 0x00
+
 #ifdef __cplusplus
 }
 #endif

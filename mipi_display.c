@@ -209,6 +209,10 @@ void mipi_display_init()
         sleep_ms(100);
     }
 
+#ifdef MIPI_DISPLAY_ST7735
+    mipi_display_init_st7735();
+#else
+
     /* Send minimal init commands. */
     mipi_display_write_command(MIPI_DCS_SOFT_RESET);
     sleep_ms(200);
@@ -232,6 +236,8 @@ void mipi_display_init()
     mipi_display_write_command(MIPI_DCS_SET_DISPLAY_ON);
     sleep_ms(200);
 
+#endif
+
     /* Enable backlight */
     if (MIPI_DISPLAY_PIN_BL > 0) {
         gpio_set_function(MIPI_DISPLAY_PIN_BL, GPIO_FUNC_SIO);
@@ -248,6 +254,81 @@ void mipi_display_init()
     mipi_display_dma_init();
 #endif /* HAGL_HAL_USE_DMA */
 #endif /* HAGL_HAS_HAL_BACK_BUFFER */
+}
+
+
+void mipi_display_init_st7735()
+{
+    /* taken/adapted from Adafruit_ST7735.cpp in Adafruit-ST7735-Library for an Adafruit ADA358 1.8" display */
+
+    //  Rcmd1[] = {
+    mipi_display_write_command(MIPI_DCS_SOFT_RESET);
+    sleep_ms(150);
+
+    mipi_display_write_command(MIPI_DCS_EXIT_SLEEP_MODE);
+    sleep_ms(500);
+
+    mipi_display_write_command(ST7735_FRMCTR1);
+    mipi_display_write_data((uint8_t[3]){0x01, 0x2C, 0x2D}, 3);
+
+    mipi_display_write_command(ST7735_FRMCTR2);
+    mipi_display_write_data((uint8_t[3]){0x01, 0x2C, 0x2D}, 3);
+
+    mipi_display_write_command(ST7735_FRMCTR3);
+    mipi_display_write_data((uint8_t[6]){0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D}, 6);
+
+    mipi_display_write_command(ST7735_INVCTR);
+    mipi_display_write_data(&(uint8_t){0x07}, 1);
+
+    mipi_display_write_command(ST7735_PWCTR1);
+    mipi_display_write_data((uint8_t[3]){0xA2, 0x02, 0x84}, 3);
+
+    mipi_display_write_command(ST7735_PWCTR2);
+    mipi_display_write_data(&(uint8_t){0xC5}, 1);
+
+    mipi_display_write_command(ST7735_PWCTR3);
+    mipi_display_write_data((uint8_t[2]){0x0A, 0x00}, 2);
+
+    mipi_display_write_command(ST7735_PWCTR4);
+    mipi_display_write_data((uint8_t[2]){0x8A, 0x2A}, 2);
+
+    mipi_display_write_command(ST7735_PWCTR5);
+    mipi_display_write_data((uint8_t[2]){0x8A, 0xEE}, 2);
+
+    mipi_display_write_command(ST7735_VMCTR1);
+    mipi_display_write_data(&(uint8_t){0x0E}, 1);
+
+    mipi_display_write_command(ST77XX_INVOFF);
+
+    mipi_display_write_command(ST77XX_MADCTL);
+    mipi_display_write_data(&(uint8_t){0xC8}, 1);
+
+    mipi_display_write_command(ST77XX_COLMOD);
+    mipi_display_write_data(&(uint8_t){0x05}, 1);
+
+    // Rcmd2red[] = {
+    mipi_display_write_command(ST77XX_CASET);
+    mipi_display_write_data((uint8_t[4]){0x00, 0x00, 0x00, 0x7F}, 4);
+
+    mipi_display_write_command(ST77XX_RASET);
+    mipi_display_write_data((uint8_t[4]){0x00, 0x00, 0x00, 0x9F}, 4);
+
+    // Rcmd3[] = {
+    // ST7735_GMCTRP1 / ST7735_GMCTRN1 omitted
+
+    mipi_display_write_command(ST77XX_NORON);
+    sleep_ms(10);
+
+    mipi_display_write_command(ST77XX_DISPON);
+    sleep_ms(100);
+
+
+    mipi_display_write_command(ST77XX_MADCTL);
+    mipi_display_write_data(&(uint8_t){0xC0}, 1);
+
+    uint8_t madctl = ST77XX_MADCTL_MY | ST77XX_MADCTL_MV | ST77XX_MADCTL_RGB;
+    mipi_display_write_command(ST77XX_MADCTL);
+    mipi_display_write_data(&(uint8_t){madctl}, 1);
 }
 
 size_t mipi_display_write(uint16_t x1, uint16_t y1, uint16_t w, uint16_t h, uint8_t *buffer)
