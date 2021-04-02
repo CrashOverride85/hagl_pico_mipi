@@ -1,34 +1,19 @@
 # ST7735_HACK branch
-This branch includes a bodge to make the Adafruit 1.8" (ADA358) display work. Code is functional (display works ok), but is largely ripped off from Adafruit-ST7735-Library (Arduino library), and doesn't fit in well with the rest of hagl_pico_mipi yet.
 
-Tested with these options in `CMakeLists.txt`:
+All the Adafruit 1.8" (ADA358) display needed to work with the master branch of hagl_pico_mipi was this in `CMakeLists.txt`:
+(thanks to @tuupola for assinstance in configuring it correctly)
+
 ```
-target_compile_definitions(test2 PRIVATE
-  NDEBUG
-  HAGL_HAL_USE_DOUBLE_BUFFER
-  HAGL_HAL_USE_DMA
-  HAGL_HAL_DEBUG
-  MIPI_DISPLAY_ST7735
-)
-
-target_compile_definitions(test2 PRIVATE
-  MIPI_DISPLAY_SPI_CLOCK_SPEED_HZ=48000000
-  MIPI_DISPLAY_PIN_CS=17
-  MIPI_DISPLAY_PIN_DC=20
-  MIPI_DISPLAY_PIN_RST=2
-  MIPI_DISPLAY_PIN_BL=6
-  MIPI_DISPLAY_PIN_CLK=18
-  MIPI_DISPLAY_PIN_MOSI=19
-  MIPI_DISPLAY_PIN_MISO=16
-  MIPI_DISPLAY_PIXEL_FORMAT=MIPI_DCS_PIXEL_FORMAT_18BIT
-  MIPI_DISPLAY_ADDRESS_MODE=MIPI_DCS_ADDRESS_MODE_RGB
+  MIPI_DISPLAY_PIXEL_FORMAT=MIPI_DCS_PIXEL_FORMAT_16BIT
+  MIPI_DISPLAY_ADDRESS_MODE=MIPI_DCS_ADDRESS_MODE_BGR|MIPI_DCS_ADDRESS_MODE_SWAP_XY
   MIPI_DISPLAY_WIDTH=160
   MIPI_DISPLAY_HEIGHT=128
   MIPI_DISPLAY_OFFSET_X=0
   MIPI_DISPLAY_OFFSET_Y=0
-  MIPI_DISPLAY_INVERT=0
-)
-```
+ ```
+
+
+~~This branch includes a bodge to make the Adafruit 1.8" (ADA358) display work. Code is functional (display works ok), but is largely ripped off from Adafruit-ST7735-Library (Arduino library), and doesn't fit in well with the rest of hagl_pico_mipi yet.~~
 
 
 # MIPI DCS HAL for HAGL Graphics Library
