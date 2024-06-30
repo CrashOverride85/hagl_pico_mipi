@@ -97,6 +97,8 @@ mipi_display_write_data(const uint8_t *data, size_t length)
     gpio_put(MIPI_DISPLAY_PIN_CS, 1);
 }
 
+
+#if HAGL_HAL_PIXEL_SIZE==2
 static void
 mipi_display_write_data_dma(const uint8_t *buffer, size_t length)
 {
@@ -114,6 +116,25 @@ mipi_display_write_data_dma(const uint8_t *buffer, size_t length)
     dma_channel_set_trans_count(dma_channel, length, false);
     dma_channel_set_read_addr(dma_channel, buffer, true);
 }
+#else
+static void
+mipi_display_write_data_dma(const uint8_t *buffer, size_t length)
+{
+    if (0 == length) {
+        return;
+    };
+
+    /* Set DC high to denote incoming data. */
+    gpio_put(MIPI_DISPLAY_PIN_DC, 1);
+
+    /* Set CS low to reserve the SPI bus. */
+    gpio_put(MIPI_DISPLAY_PIN_CS, 0);
+
+    dma_channel_wait_for_finish_blocking(dma_channel);
+    dma_channel_set_trans_count(dma_channel, length, false);
+    dma_channel_set_read_addr(dma_channel, buffer, true);
+}
+#endif
 
 static void
 mipi_display_dma_init()
@@ -140,7 +161,7 @@ mipi_display_read_data(uint8_t *data, size_t length)
     };
 }
 
-static void
+void
 mipi_display_set_address_xyxy(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2)
 {
     uint8_t command;
@@ -320,7 +341,7 @@ mipi_display_init()
 
 #ifdef HAGL_HAS_HAL_BACK_BUFFER
 #ifdef HAGL_HAL_USE_DMA
-    mipi_display_dma_init();
+    //mipi_display_dma_init();
 #endif /* HAGL_HAL_USE_DMA */
 #endif /* HAGL_HAS_HAL_BACK_BUFFER */
 }
