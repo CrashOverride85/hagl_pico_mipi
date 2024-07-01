@@ -65,6 +65,71 @@ static hagl_bitmap_t bb;
 static void flush_dma_pixel_double();
 void mipi_display_set_address_xyxy(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2);
 
+struct dma_transfer_t
+{
+    bool transfer_in_progress;
+    hagl_color_t line[MIPI_DISPLAY_WIDTH];
+    hagl_color_t *ptr;
+    uint16_t y;
+    bool even_line;
+    uint64_t start_time_us;
+};
+
+#ifdef HAGL_HAL_USE_DMA
+#if HAGL_HAL_PIXEL_SIZE==2
+static struct dma_transfer_t dma_transfer;
+#endif
+#endif
+
+
+
+uint16_t dma_pixel_double_get_data(void *user, uint8_t **buffer)
+{
+    struct dma_transfer_t *dma_transfer = user;
+
+    if (!dma_transfer->transfer_in_progress)
+    {
+        dma_transfer->transfer_in_progress = true;
+
+        dma_transfer->ptr = (hagl_color_t *) bb.buffer;
+        dma_transfer->y = 0;
+        dma_transfer->even_line = true;
+        
+        dma_transfer->start_time_us = time_us_64();
+//        memset(dma_transfer->line, 0, sizeof(dma_transfer.line));
+    }
+
+    if (dma_transfer->even_line)
+    {
+        dma_transfer->even_line = false;
+
+        while (dma_transfer->y < HAGL_PICO_MIPI_DISPLAY_HEIGHT) {
+            for (uint16_t x = 0; x < HAGL_PICO_MIPI_DISPLAY_WIDTH; x++) {
+                dma_transfer->line[x * 2] = *(dma_transfer->ptr);
+                dma_transfer->line[x * 2 + 1] = *(dma_transfer->ptr++);
+            }
+
+            /* Start DMA for even line */
+            //dma_channel_set_read_addr(dma_transfer.dma_chan, dma_transfer.line, true);
+            *buffer = (uint8_t*)dma_transfer->line;
+            dma_transfer->y++;
+            return sizeof(dma_transfer->line);
+        }
+    }
+    else
+    {
+        /* Start DMA for odd line */
+        dma_transfer->even_line = true;
+     //   dma_channel_set_read_addr(dma_transfer.dma_chan, dma_transfer.line, true);
+        *buffer = (uint8_t*)dma_transfer->line;
+        return sizeof(dma_transfer->line);
+    }
+
+    return 0;
+}
+
+
+
 static size_t
 flush(void *self)
 {
@@ -79,7 +144,7 @@ flush(void *self)
 
 #if HAGL_HAL_PIXEL_SIZE==2
 #ifdef HAGL_HAL_USE_DMA
-    flush_dma_pixel_double();
+    mipi_display_write_dma_start(&dma_transfer, dma_pixel_double_get_data);
 #else
     static hagl_color_t line[MIPI_DISPLAY_WIDTH];
 
@@ -99,19 +164,9 @@ flush(void *self)
 #endif /* HAGL_HAL_PIXEL_SIZE==2 */
 }
 
-struct dma_transfer_t
-{
-    bool transfer_in_progress;
-    hagl_color_t line[MIPI_DISPLAY_WIDTH];
-    hagl_color_t *ptr;
-    size_t transfer_count;
-    uint16_t y;
- //   uint16_t x;
-    bool even_line;
-    int dma_chan;
-    uint64_t start_time_us;
-} dma_transfer;
 
+
+/*
 static void
 flush_dma_pixel_double()
 {
@@ -119,85 +174,57 @@ flush_dma_pixel_double()
     {
         dma_transfer.transfer_in_progress = true;
         dma_transfer.ptr = (hagl_color_t *) bb.buffer;
-        dma_transfer.transfer_count = 0;
         dma_transfer.y = 0;
-     //   dma_transfer.x = 0;
         dma_transfer.even_line = true;
-        dma_transfer.dma_chan = dma_claim_unused_channel(true);
+        
         dma_transfer.start_time_us = time_us_64();
         memset(dma_transfer.line, 0, sizeof(dma_transfer.line));
 
-        dma_channel_config dma_config = dma_channel_get_default_config(dma_transfer.dma_chan);
-        if (spi0 == MIPI_DISPLAY_SPI_PORT) {
-            channel_config_set_dreq(&dma_config, DREQ_SPI0_TX);
-        } else {
-            channel_config_set_dreq(&dma_config, DREQ_SPI1_TX);
-        }
 
-        dma_channel_set_write_addr(dma_transfer.dma_chan, &spi_get_hw(MIPI_DISPLAY_SPI_PORT)->dr, false);
-
-        dma_channel_set_irq0_enabled(dma_transfer.dma_chan, true);
-        irq_set_exclusive_handler(DMA_IRQ_0, flush_dma_pixel_double);
-        irq_set_enabled(DMA_IRQ_0, true);
-        
-        channel_config_set_transfer_data_size(&dma_config, DMA_SIZE_8); // MIPI_DISPLAY_DEPTH = 2 => 16bit
-        dma_channel_set_trans_count(dma_transfer.dma_chan, MIPI_DISPLAY_WIDTH*(MIPI_DISPLAY_DEPTH/8), false);
-        
-        dma_channel_set_config(dma_transfer.dma_chan, &dma_config, false);
         mipi_display_set_address_xyxy(0, 0, MIPI_DISPLAY_WIDTH-1, MIPI_DISPLAY_HEIGHT-1);
+
+    
+        gpio_put(MIPI_DISPLAY_PIN_DC, 1);
+        gpio_put(MIPI_DISPLAY_PIN_CS, 0);
     }
     else
     {
-        dma_hw->ints0 = 1u << dma_transfer.dma_chan;
+       dma_channel_acknowledge_irq0(dma_transfer.dma_chan);
     }
 
     if (dma_transfer.even_line)
     {
         dma_transfer.even_line = false;
 
-        for (; dma_transfer.y < HAGL_PICO_MIPI_DISPLAY_HEIGHT; ) {
+        while (dma_transfer.y < HAGL_PICO_MIPI_DISPLAY_HEIGHT) {
             for (uint16_t x = 0; x < HAGL_PICO_MIPI_DISPLAY_WIDTH; x++) {
                 dma_transfer.line[x * 2] = *(dma_transfer.ptr);
                 dma_transfer.line[x * 2 + 1] = *(dma_transfer.ptr++);
             }
-            // start DMA 1
-    //        mipi_display_set_address_xyxy(0, dma_transfer.y, MIPI_DISPLAY_WIDTH, dma_transfer.y);
 
-            /* Incoming data */
-            gpio_put(MIPI_DISPLAY_PIN_DC, 1);
-            gpio_put(MIPI_DISPLAY_PIN_CS, 0);
+            
             dma_channel_set_read_addr(dma_transfer.dma_chan, dma_transfer.line, true);
-            dma_transfer.transfer_count++;
             dma_transfer.y++;
             return;
         }
     }
     else
     {
-        // start DMA 2
+        
         dma_transfer.even_line = true;
-  //      mipi_display_set_address_xyxy(0, dma_transfer.y+1, MIPI_DISPLAY_WIDTH, dma_transfer.y+1);
-
-        /* Incoming data */
-        gpio_put(MIPI_DISPLAY_PIN_DC, 1);
-        gpio_put(MIPI_DISPLAY_PIN_CS, 0);
         dma_channel_set_read_addr(dma_transfer.dma_chan, dma_transfer.line, true);
-        dma_transfer.transfer_count++;
         return;
     }
 
     // done; update cs/dc etc.
     dma_transfer.transfer_in_progress = false;
-    dma_channel_cleanup(dma_transfer.dma_chan);
-    dma_channel_unclaim(dma_transfer.dma_chan);
     uint64_t time_taken_us = time_us_64() - dma_transfer.start_time_us;
-    printf("DMA complete, time = %llu us (%llu ms). y = %d, transfer_count = %d;\n", time_taken_us, time_taken_us/1000, dma_transfer.y, dma_transfer.transfer_count);
+    printf("DMA complete, time = %llu us (%llu ms). y = %d\n", time_taken_us, time_taken_us/1000, dma_transfer.y);
 
-    /* Set CS low to de-reserve the SPI bus. */
+    
     gpio_put(MIPI_DISPLAY_PIN_CS, 1);
-    //gpio_put(MIPI_DISPLAY_PIN_DC, 0);
 }
-
+*/
 static void
 put_pixel(void *self, int16_t x0, int16_t y0, hagl_color_t color)
 {

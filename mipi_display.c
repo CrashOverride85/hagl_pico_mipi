@@ -46,6 +46,9 @@ SPDX-License-Identifier: MIT
 #include "mipi_display.h"
 
 static int dma_channel;
+static get_data_callback_t dma_data_callback;
+static void *dma_user;
+
 
 static inline uint16_t
 htons(uint16_t i)
@@ -98,7 +101,7 @@ mipi_display_write_data(const uint8_t *data, size_t length)
 }
 
 
-#if HAGL_HAL_PIXEL_SIZE==2
+
 static void
 mipi_display_write_data_dma(const uint8_t *buffer, size_t length)
 {
@@ -112,29 +115,50 @@ mipi_display_write_data_dma(const uint8_t *buffer, size_t length)
     /* Set CS low to reserve the SPI bus. */
     gpio_put(MIPI_DISPLAY_PIN_CS, 0);
 
+
     dma_channel_wait_for_finish_blocking(dma_channel);
     dma_channel_set_trans_count(dma_channel, length, false);
     dma_channel_set_read_addr(dma_channel, buffer, true);
 }
-#else
-static void
-mipi_display_write_data_dma(const uint8_t *buffer, size_t length)
-{
-    if (0 == length) {
-        return;
-    };
 
+static void
+mipi_display_dma_irq()
+{
+    dma_channel_acknowledge_irq0(dma_channel);
+
+    if (dma_data_callback == NULL)
+        return;
+
+    uint8_t *buffer;
+    uint16_t bytes = dma_data_callback(dma_user, &buffer);
+
+    if (bytes == 0)
+    {
+        /* Done, de-reserve the SPI bus. */
+        gpio_put(MIPI_DISPLAY_PIN_CS, 1);
+
+        dma_data_callback = NULL;
+        return;
+    }
+
+    dma_channel_set_read_addr(dma_channel, buffer, true);
+}
+
+void
+mipi_display_write_dma_start(void *user, get_data_callback_t get_data_callback)
+{
     /* Set DC high to denote incoming data. */
     gpio_put(MIPI_DISPLAY_PIN_DC, 1);
 
     /* Set CS low to reserve the SPI bus. */
     gpio_put(MIPI_DISPLAY_PIN_CS, 0);
 
-    dma_channel_wait_for_finish_blocking(dma_channel);
-    dma_channel_set_trans_count(dma_channel, length, false);
-    dma_channel_set_read_addr(dma_channel, buffer, true);
+    dma_data_callback = get_data_callback;
+    dma_user = user;
+
+    /* Start DMA by manually calling interrupt handler once */
+    mipi_display_dma_irq();
 }
-#endif
 
 static void
 mipi_display_dma_init()
@@ -151,6 +175,17 @@ mipi_display_dma_init()
     }
     dma_channel_set_config(dma_channel, &channel_config, false);
     dma_channel_set_write_addr(dma_channel, &spi_get_hw(MIPI_DISPLAY_SPI_PORT)->dr, false);
+
+#if HAGL_HAL_PIXEL_SIZE==2
+    dma_channel_set_irq0_enabled(dma_channel, true);
+    irq_set_exclusive_handler(DMA_IRQ_0, mipi_display_dma_irq);
+    irq_set_enabled(DMA_IRQ_0, true);
+    
+    channel_config_set_transfer_data_size(&channel_config, DMA_SIZE_8);
+    dma_channel_set_trans_count(dma_channel, MIPI_DISPLAY_WIDTH*(MIPI_DISPLAY_DEPTH/8), false);
+    
+    dma_channel_set_config(dma_channel, &channel_config, false);
+#endif
 }
 
 static void
@@ -341,7 +376,7 @@ mipi_display_init()
 
 #ifdef HAGL_HAS_HAL_BACK_BUFFER
 #ifdef HAGL_HAL_USE_DMA
-    //mipi_display_dma_init();
+    mipi_display_dma_init();
 #endif /* HAGL_HAL_USE_DMA */
 #endif /* HAGL_HAS_HAL_BACK_BUFFER */
 }
@@ -460,4 +495,9 @@ void
 mipi_display_close()
 {
     spi_deinit(MIPI_DISPLAY_SPI_PORT);
+
+#ifdef HAGL_HAL_USE_DMA  
+    dma_channel_cleanup(dma_channel);
+    dma_channel_unclaim(dma_channel);
+#endif
 }
