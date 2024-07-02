@@ -92,8 +92,8 @@ uint16_t dma_pixel_double_get_data(void *user, uint8_t **buffer)
 
         while (dma_transfer->y < HAGL_PICO_MIPI_DISPLAY_HEIGHT) {
             for (uint16_t x = 0; x < HAGL_PICO_MIPI_DISPLAY_WIDTH; x++) {
-                dma_transfer->line[x * 2] = *(dma_transfer->ptr);
-                dma_transfer->line[x * 2 + 1] = *(dma_transfer->ptr++);
+                dma_transfer->line[x * 2] = htons(*(dma_transfer->ptr));
+                dma_transfer->line[x * 2 + 1] = htons(*(dma_transfer->ptr++));
             }
 
             /* Start DMA for even line */

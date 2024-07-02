@@ -49,7 +49,9 @@ static int dma_channel;
 static get_data_callback_t dma_data_callback;
 static void *dma_user;
 
-static inline uint16_t
+static void mipi_display_set_address_xyxy(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2);
+
+inline uint16_t
 htons(uint16_t i)
 {
     __asm ("rev16 %0, %0" : "+l" (i) : : );
@@ -133,6 +135,8 @@ mipi_display_dma_irq()
         /* Done, de-reserve the SPI bus. */
         gpio_put(MIPI_DISPLAY_PIN_CS, 1);
 
+        spi_set_format(MIPI_DISPLAY_SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+
         dma_data_callback = NULL;
         return;
     }
@@ -148,6 +152,8 @@ mipi_display_dma_irq()
 void
 mipi_display_write_dma_start(void *user, get_data_callback_t get_data_callback)
 {
+    mipi_display_set_address_xyxy(0, 0, MIPI_DISPLAY_WIDTH-1, MIPI_DISPLAY_HEIGHT-1);
+
     /* Set DC high to denote incoming data. */
     gpio_put(MIPI_DISPLAY_PIN_DC, 1);
 
@@ -156,6 +162,8 @@ mipi_display_write_dma_start(void *user, get_data_callback_t get_data_callback)
 
     dma_data_callback = get_data_callback;
     dma_user = user;
+
+    spi_set_format(MIPI_DISPLAY_SPI_PORT, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 
     /* Start DMA by manually calling interrupt handler once */
     mipi_display_dma_irq();
@@ -182,8 +190,8 @@ mipi_display_dma_init()
     irq_set_exclusive_handler(DMA_IRQ_0, mipi_display_dma_irq);
     irq_set_enabled(DMA_IRQ_0, true);
     
-    channel_config_set_transfer_data_size(&channel_config, DMA_SIZE_8);
-    dma_channel_set_trans_count(dma_channel, MIPI_DISPLAY_WIDTH*(MIPI_DISPLAY_DEPTH/8), false);
+    channel_config_set_transfer_data_size(&channel_config, DMA_SIZE_16);
+    dma_channel_set_trans_count(dma_channel, MIPI_DISPLAY_WIDTH, false); /* assumes 2 bytes per pixel */
     
     dma_channel_set_config(dma_channel, &channel_config, false);
 #endif
