@@ -47,9 +47,6 @@ assumed to be valid.
 
 #include <string.h>
 #include <hardware/gpio.h>
-#include <hardware/dma.h>
-#include <hardware/spi.h>
-#include <hardware/irq.h>
 #include <mipi_display.h>
 #include <mipi_dcs.h>
 
@@ -62,9 +59,6 @@ assumed to be valid.
 
 static hagl_bitmap_t bb;
 
-static void flush_dma_pixel_double();
-void mipi_display_set_address_xyxy(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2);
-
 struct dma_transfer_t
 {
     bool transfer_in_progress;
@@ -72,7 +66,6 @@ struct dma_transfer_t
     hagl_color_t *ptr;
     uint16_t y;
     bool even_line;
-    uint64_t start_time_us;
 };
 
 #ifdef HAGL_HAL_USE_DMA
@@ -81,8 +74,6 @@ static struct dma_transfer_t dma_transfer;
 #endif
 #endif
 
-
-
 uint16_t dma_pixel_double_get_data(void *user, uint8_t **buffer)
 {
     struct dma_transfer_t *dma_transfer = user;
@@ -90,13 +81,9 @@ uint16_t dma_pixel_double_get_data(void *user, uint8_t **buffer)
     if (!dma_transfer->transfer_in_progress)
     {
         dma_transfer->transfer_in_progress = true;
-
         dma_transfer->ptr = (hagl_color_t *) bb.buffer;
         dma_transfer->y = 0;
         dma_transfer->even_line = true;
-        
-        dma_transfer->start_time_us = time_us_64();
-//        memset(dma_transfer->line, 0, sizeof(dma_transfer.line));
     }
 
     if (dma_transfer->even_line)
@@ -110,7 +97,6 @@ uint16_t dma_pixel_double_get_data(void *user, uint8_t **buffer)
             }
 
             /* Start DMA for even line */
-            //dma_channel_set_read_addr(dma_transfer.dma_chan, dma_transfer.line, true);
             *buffer = (uint8_t*)dma_transfer->line;
             dma_transfer->y++;
             return sizeof(dma_transfer->line);
@@ -120,15 +106,13 @@ uint16_t dma_pixel_double_get_data(void *user, uint8_t **buffer)
     {
         /* Start DMA for odd line */
         dma_transfer->even_line = true;
-     //   dma_channel_set_read_addr(dma_transfer.dma_chan, dma_transfer.line, true);
         *buffer = (uint8_t*)dma_transfer->line;
         return sizeof(dma_transfer->line);
     }
 
+    dma_transfer->transfer_in_progress = false;
     return 0;
 }
-
-
 
 static size_t
 flush(void *self)
@@ -164,67 +148,6 @@ flush(void *self)
 #endif /* HAGL_HAL_PIXEL_SIZE==2 */
 }
 
-
-
-/*
-static void
-flush_dma_pixel_double()
-{
-    if (!dma_transfer.transfer_in_progress)
-    {
-        dma_transfer.transfer_in_progress = true;
-        dma_transfer.ptr = (hagl_color_t *) bb.buffer;
-        dma_transfer.y = 0;
-        dma_transfer.even_line = true;
-        
-        dma_transfer.start_time_us = time_us_64();
-        memset(dma_transfer.line, 0, sizeof(dma_transfer.line));
-
-
-        mipi_display_set_address_xyxy(0, 0, MIPI_DISPLAY_WIDTH-1, MIPI_DISPLAY_HEIGHT-1);
-
-    
-        gpio_put(MIPI_DISPLAY_PIN_DC, 1);
-        gpio_put(MIPI_DISPLAY_PIN_CS, 0);
-    }
-    else
-    {
-       dma_channel_acknowledge_irq0(dma_transfer.dma_chan);
-    }
-
-    if (dma_transfer.even_line)
-    {
-        dma_transfer.even_line = false;
-
-        while (dma_transfer.y < HAGL_PICO_MIPI_DISPLAY_HEIGHT) {
-            for (uint16_t x = 0; x < HAGL_PICO_MIPI_DISPLAY_WIDTH; x++) {
-                dma_transfer.line[x * 2] = *(dma_transfer.ptr);
-                dma_transfer.line[x * 2 + 1] = *(dma_transfer.ptr++);
-            }
-
-            
-            dma_channel_set_read_addr(dma_transfer.dma_chan, dma_transfer.line, true);
-            dma_transfer.y++;
-            return;
-        }
-    }
-    else
-    {
-        
-        dma_transfer.even_line = true;
-        dma_channel_set_read_addr(dma_transfer.dma_chan, dma_transfer.line, true);
-        return;
-    }
-
-    // done; update cs/dc etc.
-    dma_transfer.transfer_in_progress = false;
-    uint64_t time_taken_us = time_us_64() - dma_transfer.start_time_us;
-    printf("DMA complete, time = %llu us (%llu ms). y = %d\n", time_taken_us, time_taken_us/1000, dma_transfer.y);
-
-    
-    gpio_put(MIPI_DISPLAY_PIN_CS, 1);
-}
-*/
 static void
 put_pixel(void *self, int16_t x0, int16_t y0, hagl_color_t color)
 {

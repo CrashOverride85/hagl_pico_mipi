@@ -49,7 +49,6 @@ static int dma_channel;
 static get_data_callback_t dma_data_callback;
 static void *dma_user;
 
-
 static inline uint16_t
 htons(uint16_t i)
 {
@@ -100,8 +99,6 @@ mipi_display_write_data(const uint8_t *data, size_t length)
     gpio_put(MIPI_DISPLAY_PIN_CS, 1);
 }
 
-
-
 static void
 mipi_display_write_data_dma(const uint8_t *buffer, size_t length)
 {
@@ -114,7 +111,6 @@ mipi_display_write_data_dma(const uint8_t *buffer, size_t length)
 
     /* Set CS low to reserve the SPI bus. */
     gpio_put(MIPI_DISPLAY_PIN_CS, 0);
-
 
     dma_channel_wait_for_finish_blocking(dma_channel);
     dma_channel_set_trans_count(dma_channel, length, false);
@@ -141,9 +137,14 @@ mipi_display_dma_irq()
         return;
     }
 
+    /* Start (next) DMA transfer */
+    gpio_put(MIPI_DISPLAY_PIN_DC, 1);
+    gpio_put(MIPI_DISPLAY_PIN_CS, 0);
     dma_channel_set_read_addr(dma_channel, buffer, true);
 }
 
+/* Start DMA transfers that will repeatedly call get_data_callback and write the resulting 
+ * data to the screen using DMA. Transfers finish when that function returns 0  */
 void
 mipi_display_write_dma_start(void *user, get_data_callback_t get_data_callback)
 {
@@ -196,7 +197,7 @@ mipi_display_read_data(uint8_t *data, size_t length)
     };
 }
 
-void
+static void
 mipi_display_set_address_xyxy(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2)
 {
     uint8_t command;
@@ -337,7 +338,7 @@ mipi_display_init()
     hagl_hal_debug("Enable vsync notification on pin %d\n", MIPI_DISPLAY_PIN_TE);
 #endif /* MIPI_DISPLAY_PIN_TE > 0 */
 
-#if MIPI_DISPLAY_INVERT
+#ifdef MIPI_DISPLAY_INVERT
     mipi_display_write_command(MIPI_DCS_ENTER_INVERT_MODE);
     hagl_hal_debug("%s\n", "Inverting display.");
 #else
